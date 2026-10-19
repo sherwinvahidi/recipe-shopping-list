@@ -73,12 +73,20 @@ class ShoppingView(QWidget):
         return self._remove_buttons[recipe_id]
 
     def refresh_library(self) -> None:
-        kept = []
+        kept: list[Recipe] = []
         for r in self._selected:
             try:
                 kept.append(self._repo.get(r.id))
+                continue
             except KeyError:
                 pass
+            matches = self._repo.find_by_name(r.name)
+            taken = {k.id for k in kept} | {o.id for o in self._selected}
+            if len(matches) == 1 and matches[0].id not in taken:
+                kept.append(self._repo.get(matches[0].id))
+            else:
+                self.status_message.emit(
+                    f"'{r.name}' was removed from the shopping list")
         self._selected = kept
         self._rebuild_library()
         self._rebuild_selected()
@@ -167,7 +175,7 @@ class ShoppingView(QWidget):
         self._remove_buttons = {}
         self.selected_list.clear()
         for r in self._selected:
-            item = QListWidgetItem(r.name)
+            item = QListWidgetItem(f"{r.name} — serves {r.servings}")
             item.setData(Qt.UserRole, r.id)
             self.selected_list.addItem(item)
             button = QPushButton("Remove")
