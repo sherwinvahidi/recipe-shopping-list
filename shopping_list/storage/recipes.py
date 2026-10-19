@@ -22,10 +22,16 @@ class RecipeRepository:
         try:
             yield
         except BaseException:
-            self.conn.execute("ROLLBACK")
+            if self.conn.in_transaction:
+                self.conn.execute("ROLLBACK")
             raise
         else:
-            self.conn.execute("COMMIT")
+            try:
+                self.conn.execute("COMMIT")
+            except BaseException:
+                if self.conn.in_transaction:
+                    self.conn.execute("ROLLBACK")
+                raise
 
     def add(self, recipe: Recipe) -> int:
         cur = self.conn.execute(

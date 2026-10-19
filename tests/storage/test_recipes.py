@@ -114,3 +114,24 @@ def test_failed_migration_is_atomic(monkeypatch, tmp_path):
     assert c.execute("PRAGMA user_version").fetchone()[0] == 0
     assert c.execute("SELECT COUNT(*) FROM sqlite_master WHERE name='a'").fetchone()[0] == 0
     c.close()
+
+
+def test_failed_commit_rolls_back_and_repo_stays_usable(repo):
+    with pytest.raises(sqlite3.Error):
+        with repo.transaction():
+            repo.conn.execute("PRAGMA defer_foreign_keys=ON")
+            repo.conn.execute(
+                "INSERT INTO ingredients (recipe_id, position, name, quantity, unit) VALUES (999, 0, 'x', NULL, NULL)")
+    assert not repo.conn.in_transaction
+    assert repo.conn.execute("SELECT COUNT(*) FROM ingredients").fetchone()[0] == 0
+    with repo.transaction():
+        rid = repo.add(PANCAKES)
+    assert repo.get(rid).name == "Pancakes"
+
+
+def test_body_error_not_masked_when_sqlite_already_rolled_back(repo):
+    with pytest.raises(ValueError, match="boom"):
+        with repo.transaction():
+            repo.conn.execute("ROLLBACK")
+            raise ValueError("boom")
+    assert not repo.conn.in_transaction
