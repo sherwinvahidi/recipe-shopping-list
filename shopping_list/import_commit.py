@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Literal
 
 from shopping_list.core.importer import ImportPreview
@@ -21,6 +21,8 @@ class ImportResult:
     added: int
     replaced: int
     skipped: int
+    # Old library id -> id of the recipe that replaced it.
+    replaced_ids: dict[int, int] = field(default_factory=dict, compare=False)
 
 
 def commit_import(
@@ -57,17 +59,19 @@ def commit_import(
 
     # Phase 2: apply all writes atomically, in preview order.
     added = replaced = skipped = 0
+    replaced_ids: dict[int, int] = {}
     with repo.transaction():
         for recipe, action, existing in plan:
             if action == "skip":
                 skipped += 1
             elif action == "replace":
                 ids = sorted(s.id for s in existing)
-                repo.replace(ids[0], recipe)
+                new_id = repo.replace(ids[0], recipe)
                 for other in ids[1:]:
                     repo.delete(other)
+                replaced_ids.update(dict.fromkeys(ids, new_id))
                 replaced += 1
             else:  # "add" or "keep_both"
                 repo.add(recipe)
                 added += 1
-    return ImportResult(added, replaced, skipped)
+    return ImportResult(added, replaced, skipped, replaced_ids)

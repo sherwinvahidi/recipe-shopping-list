@@ -17,6 +17,7 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.tabs.addTab(self.library, "Library")
         self.tabs.addTab(self.shopping, "Shopping")
+        self.library.recipes_replaced.connect(self.shopping.follow_replacements)
         self.library.recipes_changed.connect(self.shopping.refresh_library)
         self.shopping.status_message.connect(
             lambda msg: self.statusBar().showMessage(msg, 5000))

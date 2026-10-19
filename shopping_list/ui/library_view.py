@@ -26,6 +26,8 @@ def _default_confirm(message: str) -> bool:
 
 class LibraryView(QWidget):
     recipes_changed = Signal()
+    # Emitted before recipes_changed with {old id: new id} for replaced recipes.
+    recipes_replaced = Signal(object)
 
     def __init__(self, repo: RecipeRepository,
                  confirm: Callable[[str], bool] | None = None, parent=None):
@@ -105,13 +107,16 @@ class LibraryView(QWidget):
         recipe = self._repo.get(item.data(Qt.UserRole))
         self.detail_table.setRowCount(len(recipe.ingredients))
         for row, ing in enumerate(recipe.ingredients):
-            qty = "" if ing.quantity is None else format_quantity(ing.quantity)
+            qty = "" if ing.quantity is None else format_quantity(ing.quantity, exact=True)
             for col, text in enumerate((qty, ing.unit or "", ing.name)):
                 self.detail_table.setItem(row, col, QTableWidgetItem(text))
 
     def _import(self) -> None:
-        if ImportDialog(self._repo, parent=self).exec() == QDialog.Accepted:
+        dialog = ImportDialog(self._repo, parent=self)
+        if dialog.exec() == QDialog.Accepted:
             self.refresh()
+            if dialog.result is not None and dialog.result.replaced_ids:
+                self.recipes_replaced.emit(dialog.result.replaced_ids)
             self.recipes_changed.emit()
 
     def _save_template(self) -> None:

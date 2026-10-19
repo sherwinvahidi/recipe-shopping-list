@@ -1,6 +1,8 @@
 """Shopping view: pick recipes, see the combined list, check off and copy."""
 from __future__ import annotations
 
+from fractions import Fraction
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QGuiApplication, QPalette
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QListWidget,
@@ -8,7 +10,8 @@ from PySide6.QtWidgets import (QHBoxLayout, QLabel, QLineEdit, QListWidget,
                                QWidget)
 
 from shopping_list.core.models import Recipe
-from shopping_list.core.shopping import build_shopping_list, format_line
+from shopping_list.core.shopping import (ShoppingLine, build_shopping_list,
+                                         format_line)
 from shopping_list.storage.recipes import RecipeRepository
 from shopping_list.ui.library_view import NAME_ROLE
 
@@ -22,7 +25,8 @@ class ShoppingView(QWidget):
         super().__init__(parent)
         self._repo = repo
         self._selected: list[Recipe] = []
-        self._checked: set[tuple] = set()
+        # Checked line key -> the quantity it had when checked.
+        self._checked: dict[tuple, Fraction | None] = {}
         self._add_buttons: dict[int, QPushButton] = {}
         self._remove_buttons: dict[int, QPushButton] = {}
 
@@ -72,22 +76,32 @@ class ShoppingView(QWidget):
     def remove_button(self, recipe_id: int) -> QPushButton:
         return self._remove_buttons[recipe_id]
 
+    def follow_replacements(self, replaced_ids: dict[int, int]) -> None:
+        """Point selected recipes at the recipes that replaced them."""
+        seen: set[int] = set()
+        followed: list[Recipe] = []
+        for r in self._selected:
+            r.id = replaced_ids.get(r.id, r.id)
+            if r.id not in seen:
+                seen.add(r.id)
+                followed.append(r)
+        self._selected = followed
+
     def refresh_library(self) -> None:
         kept: list[Recipe] = []
+        removed: list[str] = []
         for r in self._selected:
             try:
                 kept.append(self._repo.get(r.id))
-                continue
             except KeyError:
-                pass
-            matches = self._repo.find_by_name(r.name)
-            taken = {k.id for k in kept} | {o.id for o in self._selected}
-            if len(matches) == 1 and matches[0].id not in taken:
-                kept.append(self._repo.get(matches[0].id))
-            else:
-                self.status_message.emit(
-                    f"'{r.name}' was removed from the shopping list")
+                removed.append(r.name)
         self._selected = kept
+        if len(removed) == 1:
+            self.status_message.emit(f"'{removed[0]}' was removed from the shopping list")
+        elif removed:
+            names = ", ".join(f"'{n}'" for n in removed)
+            self.status_message.emit(
+                f"{len(removed)} recipes were removed from the shopping list: {names}")
         self._rebuild_library()
         self._rebuild_selected()
         self._recompute()
@@ -118,7 +132,7 @@ class ShoppingView(QWidget):
 
     def copy_list(self) -> None:
         lines = [l for l in build_shopping_list(self._selected)
-                 if l.key not in self._checked]
+                 if not self._is_checked(l)]
         n = len(lines)
         if n == 0:
             self.status_message.emit("Nothing left to copy")
@@ -185,7 +199,8 @@ class ShoppingView(QWidget):
 
     def _recompute(self) -> None:
         lines = build_shopping_list(self._selected)
-        self._checked &= {l.key for l in lines}
+        # A check survives only while its line still asks for the same amount.
+        self._checked = {l.key: l.quantity for l in lines if self._is_checked(l)}
         disabled = self.palette().color(QPalette.Disabled, QPalette.Text)
         self.list_widget.blockSignals(True)
         try:
@@ -193,15 +208,18 @@ class ShoppingView(QWidget):
             for line in lines:
                 item = QListWidgetItem(format_line(line))
                 item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
-                item.setData(Qt.UserRole, line.key)
+                item.setData(Qt.UserRole, (line.key, line.quantity))
                 item.setToolTip("From: " + ", ".join(line.sources))
-                checked = line.key in self._checked
+                checked = self._is_checked(line)
                 item.setCheckState(Qt.Checked if checked else Qt.Unchecked)
                 self._style(item, checked, disabled)
                 self.list_widget.addItem(item)
         finally:
             self.list_widget.blockSignals(False)
         self.empty_label.setVisible(not self._selected)
+
+    def _is_checked(self, line: ShoppingLine) -> bool:
+        return line.key in self._checked and self._checked[line.key] == line.quantity
 
     @staticmethod
     def _style(item: QListWidgetItem, checked: bool, disabled) -> None:
@@ -214,12 +232,12 @@ class ShoppingView(QWidget):
             item.setData(Qt.ForegroundRole, None)
 
     def _on_item_changed(self, item: QListWidgetItem) -> None:
-        key = item.data(Qt.UserRole)
+        key, quantity = item.data(Qt.UserRole)
         checked = item.checkState() == Qt.Checked
         if checked:
-            self._checked.add(key)
+            self._checked[key] = quantity
         else:
-            self._checked.discard(key)
+            self._checked.pop(key, None)
         disabled = self.palette().color(QPalette.Disabled, QPalette.Text)
         self.list_widget.blockSignals(True)
         try:

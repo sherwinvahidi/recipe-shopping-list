@@ -39,3 +39,11 @@ def test_huge_digit_string_is_quantity_error():
 ])
 def test_format_quantity(q, text):
     assert format_quantity(q) == text
+
+
+@pytest.mark.parametrize("q,text", [
+    (F(3), "3"), (F(3, 2), "1½"), (F(2, 3), "⅔"), (F(1, 16), "1/16"),
+    (F(17, 16), "1 1/16"), (F(5, 6), "5/6"), (F(1, 1000), "1/1000"),
+])
+def test_format_quantity_exact(q, text):
+    assert format_quantity(q, exact=True) == text

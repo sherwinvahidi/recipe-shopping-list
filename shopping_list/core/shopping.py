@@ -6,7 +6,7 @@ from fractions import Fraction
 from shopping_list.core.models import Recipe
 from shopping_list.core.names import name_key
 from shopping_list.core.quantity import format_quantity
-from shopping_list.core.units import canonical_unit
+from shopping_list.core.units import canonical_unit, normalize_unit_text
 
 PLURAL_UNITS = frozenset({"cup", "pint", "quart", "gallon"})
 
@@ -33,7 +33,8 @@ def _unit_parts(raw: str | None) -> tuple[str | None, str | None]:
         return None, None
     if known:
         return canon, canon
-    return " ".join(raw.split()).lower(), canon
+    shown = normalize_unit_text(canon)
+    return shown.lower(), shown
 
 
 def _sort_key(display_name: str, unit: str | None) -> tuple[str, str]:
@@ -89,8 +90,10 @@ def build_shopping_list(recipes: list[Recipe]) -> list[ShoppingLine]:
 def format_line(line: ShoppingLine) -> str:
     if line.quantity is None:
         return line.display_name
-    text = f"{line.display_name} — {format_quantity(line.quantity)}"
+    shown = format_quantity(line.quantity)
+    text = f"{line.display_name} — {shown}"
     if line.unit:
-        plural = "s" if line.unit in PLURAL_UNITS and line.quantity > 1 else ""
+        # Decide on the rounded number shown, so "1 cups" never appears.
+        plural = "s" if line.unit in PLURAL_UNITS and line.quantity > 1 and shown != "1" else ""
         text += f" {line.unit}{plural}"
     return text

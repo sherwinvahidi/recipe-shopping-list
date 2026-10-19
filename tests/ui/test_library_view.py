@@ -93,6 +93,7 @@ def test_import_accepted_refreshes(qtbot, monkeypatch):
         def __init__(self, r, parent=None):
             with r.transaction():
                 r.add(Recipe("Soup", 2, [Ingredient("water", F(1), "l")]))
+            self.result = None
         def exec(self):
             return QDialog.Accepted
     monkeypatch.setattr(library_view, "ImportDialog", FakeDialog)
@@ -141,3 +142,31 @@ def test_save_template_error(qtbot, monkeypatch, tmp_path):
                         lambda parent, title, text: errs.append((title, text)))
     v.template_button.click()
     assert errs and errs[0][0] == "Save failed"
+
+
+def test_import_reports_replaced_ids_before_change(qtbot, monkeypatch):
+    from shopping_list.import_commit import ImportResult
+    _, v = seeded(qtbot)
+
+    class FakeDialog:
+        def __init__(self, r, parent=None):
+            self.result = ImportResult(0, 1, 0, {1: 7})
+        def exec(self):
+            return QDialog.Accepted
+    monkeypatch.setattr(library_view, "ImportDialog", FakeDialog)
+    order = []
+    v.recipes_replaced.connect(lambda m: order.append(("replaced", m)))
+    v.recipes_changed.connect(lambda: order.append(("changed",)))
+    v.import_button.click()
+    assert order == [("replaced", {1: 7}), ("changed",)]
+
+
+def test_detail_shows_exact_quantities(qtbot):
+    repo = RecipeRepository(connect(":memory:"))
+    with repo.transaction():
+        repo.add(Recipe("Tea", 1, [Ingredient("salt", F(1, 16), "tsp"),
+                                   Ingredient("sugar", F(17, 16), "tsp"),
+                                   Ingredient("milk", F(3, 2), "cup")]))
+    v = LibraryView(repo); qtbot.addWidget(v)
+    v.recipe_list.setCurrentRow(0)
+    assert [v.detail_table.item(r, 0).text() for r in range(3)] == ["1/16", "1 1/16", "1½"]

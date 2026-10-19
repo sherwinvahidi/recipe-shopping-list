@@ -125,6 +125,7 @@ def test_refresh_library_follows_replaced_recipe(qtbot):
     item(v, "bread — 2").setCheckState(Qt.Checked)
     with repo.transaction():
         new_id = repo.replace(toast, Recipe("Toast", 2, [I("bread", F(3), None)]))
+    v.follow_replacements({toast: new_id})
     v.refresh_library()
     assert v.selected_ids() == [pancakes, new_id] and toast not in v.selected_ids()
     assert "bread — 3" in texts(v) and "bread — 2" not in texts(v)
@@ -137,3 +138,55 @@ def test_duplicate_named_recipes_selectable_separately(qtbot):
     v.refresh_library(); v.add_recipe(toast2)
     assert v.add_button(toast).isEnabled() and not v.add_button(toast2).isEnabled()
     assert texts(v) == ["jam — 1 tbsp"]
+
+
+def test_deleting_selected_recipe_does_not_swap_in_same_named_one(qtbot):
+    repo, v, _, toast = seeded(qtbot)
+    with repo.transaction():
+        toast2 = repo.add(Recipe("Toast", 2, [I("jam", F(1), "tbsp")]))
+    v.refresh_library(); v.add_recipe(toast)
+    with repo.transaction():
+        repo.delete(toast)
+    with qtbot.waitSignal(v.status_message) as sig:
+        v.refresh_library()
+    assert sig.args == ["'Toast' was removed from the shopping list"]
+    assert v.selected_ids() == [] and v.add_button(toast2).isEnabled()
+
+def test_replacing_two_selected_recipes_with_one_keeps_it_once(qtbot):
+    repo, v, pancakes, toast = seeded(qtbot)
+    v.add_recipe(pancakes); v.add_recipe(toast)
+    with repo.transaction():
+        new_id = repo.replace(pancakes, Recipe("Toast", 2, [I("bread", F(1), None)]))
+        repo.delete(toast)
+    v.follow_replacements({pancakes: new_id, toast: new_id})
+    v.refresh_library()
+    assert v.selected_ids() == [new_id] and texts(v) == ["bread — 1"]
+
+def test_several_removed_recipes_reported_in_one_message(qtbot):
+    repo, v, pancakes, toast = seeded(qtbot)
+    v.add_recipe(pancakes); v.add_recipe(toast)
+    with repo.transaction():
+        repo.delete(pancakes); repo.delete(toast)
+    with qtbot.waitSignal(v.status_message) as sig:
+        v.refresh_library()
+    assert sig.args == ["2 recipes were removed from the shopping list: 'Pancakes', 'Toast'"]
+
+def test_check_dropped_when_quantity_changes(qtbot):
+    _, v, pancakes, toast = seeded(qtbot)
+    v.add_recipe(toast); item(v, "eggs — 2").setCheckState(Qt.Checked)
+    item(v, "bread — 2").setCheckState(Qt.Checked)
+    v.add_recipe(pancakes)
+    assert item(v, "eggs — 3").checkState() == Qt.Unchecked
+    assert item(v, "bread — 2").checkState() == Qt.Checked
+    v.remove_recipe(pancakes)
+    assert item(v, "eggs — 2").checkState() == Qt.Unchecked
+
+def test_to_taste_check_not_carried_to_counted_line(qtbot):
+    repo, v, *_ = seeded(qtbot)
+    with repo.transaction():
+        a = repo.add(Recipe("A", 1, [I("egg", None, None)]))
+        b = repo.add(Recipe("B", 1, [I("egg", F(3), None)]))
+    v.refresh_library(); v.add_recipe(a)
+    item(v, "egg").setCheckState(Qt.Checked)
+    v.add_recipe(b)
+    assert item(v, "egg — 3").checkState() == Qt.Unchecked

@@ -80,6 +80,18 @@ def test_empty_selection():
     (L("beef", F(2), "lb"), "beef — 2 lb"),
     (L("flour", F(500), "g"), "flour — 500 g"),
     (L("sugar", F(2), "tsp"), "sugar — 2 tsp"),
+    (L("milk", 1 + F(1, 250), "cup"), "milk — 1 cup"),
+    (L("milk", F(199, 200), "cup"), "milk — 1 cup"),
+    (L("milk", F(201, 200), "cup"), "milk — 1.01 cups"),
 ])
 def test_format_line(line, text):
     assert format_line(line) == text
+
+
+def test_unknown_unit_key_uses_unit_normalization():
+    lines = build_shopping_list([R("A", I("tomatoes", F(1), "Can.")),
+                                 R("B", I("tomatoes", F(2), "can"))])
+    assert [format_line(l) for l in lines] == ["tomatoes — 3 Can"]
+
+def test_unknown_unit_display_collapses_whitespace():
+    assert texts([R("A", I("beans", F(1), "big  can"))]) == ["beans — 1 big can"]
