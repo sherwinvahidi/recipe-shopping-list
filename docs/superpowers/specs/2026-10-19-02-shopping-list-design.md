@@ -78,7 +78,8 @@ def build_shopping_list(recipes: list[Recipe]) -> list[ShoppingLine]
 ```
 
 - Group ingredients by `(name_key(name), unit_key)` where `unit_key` is the
-  canonical unit, the lowercased raw text for unknown units, or `None`.
+  canonical unit, the unknown unit normalized like unit aliases (trimmed,
+  trailing period dropped, whitespace collapsed) and lowercased, or `None`.
 - Sum quantities within a group as `Fraction`.
 - **"To taste" absorption:** an ingredient with no quantity is merged into a
   quantified group with the same `name_key` (any unit; if several, the first in sort order) if one exists —
@@ -101,6 +102,10 @@ def build_shopping_list(recipes: list[Recipe]) -> list[ShoppingLine]
 | 19/8 | `2⅜` |
 | 5/6 | `0.83` (denominators other than 2, 3, 4, 8 → decimal, ≤ 2 places, trailing zeros trimmed) |
 
+`format_quantity(q, exact=True)` shows other denominators as a plain fraction
+instead (`1/16`, `1 1/16`). The library's recipe detail uses this exact form,
+since it shows stored amounts; the shopping list uses the rounded form.
+
 Line text (`format_line(line) -> str`), ingredient first so the alphabetical list scans easily:
 
 | Line | Text |
@@ -111,7 +116,8 @@ Line text (`format_line(line) -> str`), ingredient first so the alphabetical lis
 | salt, None, None | `salt` |
 | garlic, 4, clove | `garlic — 4 clove` |
 
-Plural unit display: `cup`, `pint`, `quart`, `gallon` add `s` when quantity > 1.
+Plural unit display: `cup`, `pint`, `quart`, `gallon` add `s` when quantity > 1
+and the displayed number is not `1` (so 1.004 cups shows `1 cup`).
 Abbreviated units (`tsp`, `tbsp`, `fl oz`, `oz`, `lb`, `g`, `kg`, `ml`, `l`) and
 unknown units are never pluralized.
 
@@ -119,9 +125,17 @@ Hovering a line shows "From: Pancakes, Garlic Pasta".
 
 ### Checking off and copying
 
-- Check state lives in the view, keyed by `ShoppingLine.key`. It survives list
-  recomputation (a line keeps its check if its key still exists) and is lost
+- Check state lives in the view, keyed by `ShoppingLine.key` together with the
+  line's quantity when it was checked. It survives list recomputation while the
+  line still exists with the same quantity; if the amount changes (another
+  recipe adds to it, or a "to taste" line becomes a counted one) the line is
+  unchecked so the extra amount is not left off the copied list. It is lost
   when the app closes.
+- When the library changes, selected recipes that were deleted drop out of the
+  selection with one status message ("'A' was removed from the shopping list",
+  or "N recipes were removed from the shopping list: 'A', 'B'"). A recipe
+  replaced by an import is followed to its replacement by id (the import
+  reports old id → new id); recipes are never re-matched by name.
 - Checked lines are shown struck through and greyed.
 - **Copy list** puts unchecked lines on the clipboard, one per line, each
   prefixed with `- ` (e.g. `- milk — 1½ cups`). Status bar confirms
