@@ -124,7 +124,12 @@ def test_save_template(qtbot, monkeypatch, tmp_path):
 def test_save_template_cancel(qtbot, monkeypatch, tmp_path):
     _, v = seeded(qtbot)
     monkeypatch.setattr(library_view.QFileDialog, "getSaveFileName", lambda *a, **k: ("", ""))
-    v.template_button.click()  # no error, nothing written
+    errs = []
+    monkeypatch.setattr(library_view.QMessageBox, "critical",
+                        lambda *a, **k: errs.append(a))
+    v.template_button.click()
+    assert list(tmp_path.iterdir()) == []
+    assert errs == []
 
 
 def test_save_template_error(qtbot, monkeypatch, tmp_path):

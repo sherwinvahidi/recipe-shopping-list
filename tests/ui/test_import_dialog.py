@@ -1,3 +1,6 @@
+import sqlite3
+
+import pytest
 from shopping_list.core.template import TEMPLATE_CSV
 from shopping_list.import_commit import DuplicateChoice, ImportResult
 from shopping_list.storage.db import connect
@@ -85,3 +88,39 @@ def test_reload_rebuilds_preview(qtbot):
     d.load_text(H + "A,1,egg,1,\n")
     assert len(d.recipe_editors) == 1 and len(d.recipe_name_edits) == 1
     assert d.import_button.text() == "Import 1 recipe"
+
+
+def test_duplicate_box_default_is_keep_both(qtbot):
+    from shopping_list.core.models import Recipe, RecipeSummary
+    from shopping_list.ui.import_dialog import _build_duplicate_box
+    box, buttons = _build_duplicate_box(None, Recipe("Soup", 2, []), [RecipeSummary(1, "Soup", 2, 1)])
+    qtbot.addWidget(box)
+    assert box.defaultButton() is buttons["keep_both"]
+    assert box.defaultButton() is not buttons["replace"]
+    assert box.text() == "A recipe named 'Soup' already exists."
+
+
+def test_duplicate_box_multiple_matches_text(qtbot):
+    from shopping_list.core.models import Recipe, RecipeSummary
+    from shopping_list.ui.import_dialog import _build_duplicate_box
+    existing = [RecipeSummary(1, "Soup", 2, 1), RecipeSummary(2, "Soup", 2, 1)]
+    box, _ = _build_duplicate_box(None, Recipe("Soup", 2, []), existing)
+    qtbot.addWidget(box)
+    assert box.text() == "2 recipes named 'Soup' already exist. Replace removes all of them."
+
+
+@pytest.mark.parametrize("exc", [sqlite3.OperationalError("disk full"), RuntimeError("weird")])
+def test_import_failure_shows_critical_and_stays_open(qtbot, monkeypatch, exc):
+    from shopping_list.ui import import_dialog
+    _, d = dialog(qtbot)
+    d.load_text(TEMPLATE_CSV)
+    shown = []
+    monkeypatch.setattr(import_dialog.QMessageBox, "critical",
+                        lambda parent, title, text: shown.append((title, text)))
+
+    def boom(*a, **k):
+        raise exc
+    monkeypatch.setattr(import_dialog, "commit_import", boom)
+    d.import_button.click()
+    assert shown == [("Import failed", f"Nothing was imported.\n\n{exc}")]
+    assert d.result is None

@@ -1,7 +1,6 @@
 """Import dialog: load a CSV (file or paste), fix issues in a preview, commit."""
 from __future__ import annotations
 
-import sqlite3
 from pathlib import Path
 
 from PySide6.QtWidgets import (QCheckBox, QDialog, QFileDialog, QGroupBox,
@@ -24,29 +23,39 @@ NOTICE_STYLE = "color: grey;"
 UNITS_HINT = "Tip: use fl oz for liquids — oz always means weight."
 
 
-def ask_duplicate(parent: QWidget, recipe: Recipe,
-                  existing: list[RecipeSummary]) -> DuplicateChoice | None:
-    """Ask what to do with a recipe whose name already exists. None = cancel import."""
+def _build_duplicate_box(parent: QWidget | None, recipe: Recipe,
+                         existing: list[RecipeSummary]) -> tuple[QMessageBox, dict]:
     box = QMessageBox(parent)
     box.setIcon(QMessageBox.Question)
     box.setWindowTitle("Duplicate recipe")
     if len(existing) > 1:
-        box.setText(f"{len(existing)} recipes named '{recipe.name}' already exist.")
+        box.setText(f"{len(existing)} recipes named '{recipe.name}' already exist. "
+                    "Replace removes all of them.")
     else:
         box.setText(f"A recipe named '{recipe.name}' already exists.")
-    replace = box.addButton("Replace", QMessageBox.AcceptRole)
-    skip = box.addButton("Skip", QMessageBox.AcceptRole)
-    keep = box.addButton("Keep both", QMessageBox.AcceptRole)
-    cancel = box.addButton("Cancel import", QMessageBox.RejectRole)
-    box.setEscapeButton(cancel)
-    apply_all = QCheckBox("Apply to all remaining")
-    box.setCheckBox(apply_all)
+    buttons = {
+        "replace": box.addButton("Replace", QMessageBox.AcceptRole),
+        "skip": box.addButton("Skip", QMessageBox.AcceptRole),
+        "keep_both": box.addButton("Keep both", QMessageBox.AcceptRole),
+        "cancel": box.addButton("Cancel import", QMessageBox.RejectRole),
+    }
+    box.setDefaultButton(buttons["keep_both"])
+    box.setEscapeButton(buttons["cancel"])
+    box.setCheckBox(QCheckBox("Apply to all remaining"))
+    return box, buttons
+
+
+def ask_duplicate(parent: QWidget, recipe: Recipe,
+                  existing: list[RecipeSummary]) -> DuplicateChoice | None:
+    """Ask what to do with a recipe whose name already exists. None = cancel import."""
+    box, buttons = _build_duplicate_box(parent, recipe, existing)
     box.exec()
     clicked = box.clickedButton()
-    action = {replace: "replace", skip: "skip", keep: "keep_both"}.get(clicked)
+    action = {buttons["replace"]: "replace", buttons["skip"]: "skip",
+              buttons["keep_both"]: "keep_both"}.get(clicked)
     if action is None:
         return None
-    return DuplicateChoice(action, apply_all.isChecked())
+    return DuplicateChoice(action, box.checkBox().isChecked())
 
 
 class ImportDialog(QDialog):
@@ -241,7 +250,7 @@ class ImportDialog(QDialog):
             return
         try:
             result = commit_import(self._preview, self._repo, self._resolve)
-        except sqlite3.Error as err:
+        except Exception as err:
             QMessageBox.critical(self, "Import failed", f"Nothing was imported.\n\n{err}")
             return
         if result is None:
