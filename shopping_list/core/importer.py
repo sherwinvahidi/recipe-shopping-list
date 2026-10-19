@@ -22,6 +22,7 @@ COULD_NOT_READ = "Could not read file: {error}"
 CSV_INVALID = "This doesn't look like a valid CSV: {error}"
 IGNORED_COLUMNS = "Ignored columns: {columns}"
 SERVINGS_MISMATCH = "Rows disagree on servings; using {servings}"
+DUPLICATE_IN_IMPORT = "Another recipe in this import has the same name"
 
 
 @dataclass
@@ -197,4 +198,14 @@ def revalidate(preview: ImportPreview) -> ImportPreview:
         active = sum(1 for row in recipe.rows if not row.skipped)
         recipe.parsed_servings, recipe_issues = validate_recipe(recipe.name, recipe.servings, active)
         recipe.issues = list(recipe.parse_issues) + recipe_issues
+
+    # Two active recipes with one name would both target the same library match.
+    counts: dict[str, int] = {}
+    for recipe in preview.active_recipes:
+        key = normalize_recipe_name(recipe.name)
+        if key:
+            counts[key] = counts.get(key, 0) + 1
+    for recipe in preview.active_recipes:
+        if counts.get(normalize_recipe_name(recipe.name), 0) > 1:
+            recipe.issues.append(Issue("error", DUPLICATE_IN_IMPORT, "recipe"))
     return preview

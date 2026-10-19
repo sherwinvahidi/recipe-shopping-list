@@ -1,6 +1,7 @@
 from fractions import Fraction as F
 
 from shopping_list.core.importer import (
+    DUPLICATE_IN_IMPORT,
     IGNORED_COLUMNS,
     MISSING_COLUMNS,
     NO_ROWS,
@@ -191,3 +192,24 @@ def test_parse_csv_text_oversized_cell_is_invalid_csv():
     preview = parse_csv_text("recipe,servings,ingredient,quantity,unit\n" + big + ",1,x,1,\n")
     assert not preview.is_importable
     assert preview.file_issues[0].message.startswith("This doesn't look like a valid CSV: ")
+
+
+def test_same_name_recipes_in_one_import_block_until_renamed():
+    p = parse_csv_text(H + "A,1,egg,1,\nB,1,egg,1,\nC,1,egg,1,\n")
+    p.recipes[1].name = "  a "
+    revalidate(p)
+    assert not p.is_importable
+    assert [i.message for i in p.recipes[0].issues] == [DUPLICATE_IN_IMPORT]
+    assert [i.message for i in p.recipes[1].issues] == [DUPLICATE_IN_IMPORT]
+    assert p.recipes[2].issues == []
+    p.recipes[1].name = "B"
+    assert revalidate(p).is_importable
+    assert p.recipes[0].issues == [] and p.recipes[1].issues == []
+
+
+def test_skipping_one_same_name_recipe_resolves_clash():
+    p = parse_csv_text(H + "A,1,egg,1,\nB,1,egg,1,\n")
+    p.recipes[1].name = "A"
+    assert not revalidate(p).is_importable
+    p.recipes[1].skipped = True
+    assert revalidate(p).is_importable
