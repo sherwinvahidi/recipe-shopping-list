@@ -124,3 +124,31 @@ def test_import_failure_shows_critical_and_stays_open(qtbot, monkeypatch, exc):
     d.import_button.click()
     assert shown == [("Import failed", f"Nothing was imported.\n\n{exc}")]
     assert d.result is None
+
+
+def test_renaming_to_same_name_blocks_import_until_resolved(qtbot):
+    from shopping_list.core.importer import DUPLICATE_IN_IMPORT
+    _, d = dialog(qtbot)
+    d.load_text(TEMPLATE_CSV)
+    d.recipe_name_edits[1].setText("pancakes")
+    assert not d.import_button.isEnabled()
+    labels = [label for _, label in d._group_labels]
+    assert all(label.text() == DUPLICATE_IN_IMPORT and not label.isHidden() for label in labels)
+    d.recipe_name_edits[1].setText("Pancakes 2")
+    assert d.import_button.isEnabled()
+    assert all(label.isHidden() for label in labels)
+
+
+def test_import_failure_message_is_readable_for_key_error(qtbot, monkeypatch):
+    from shopping_list.ui import import_dialog
+    _, d = dialog(qtbot)
+    d.load_text(TEMPLATE_CSV)
+    shown = []
+    monkeypatch.setattr(import_dialog.QMessageBox, "critical",
+                        lambda parent, title, text: shown.append(text))
+
+    def boom(*a, **k):
+        raise KeyError(1)
+    monkeypatch.setattr(import_dialog, "commit_import", boom)
+    d.import_button.click()
+    assert shown == ["Nothing was imported.\n\nUnexpected error (KeyError)."]

@@ -71,3 +71,48 @@ def test_replace_with_several_matches_keeps_one():
     result = commit_import(parse_csv_text(TEMPLATE_CSV), repo, lambda r, e: DuplicateChoice("replace", True))
     assert result == ImportResult(0, 2, 0)
     assert len(repo.list_summaries()) == 2
+
+
+H = "recipe,servings,ingredient,quantity,unit\n"
+
+
+def test_sticky_choice_asks_again_for_recipe_with_several_matches():
+    repo = fresh(); commit_import(parse_csv_text(TEMPLATE_CSV), repo, never)
+    commit_import(parse_csv_text(H + "Garlic Pasta,2,garlic,1,clove\n"), repo,
+                  lambda r, e: DuplicateChoice("keep_both"))
+    calls = []
+
+    def resolve(recipe, existing):
+        calls.append((recipe.name, len(existing)))
+        return DuplicateChoice("replace", apply_to_all=True)
+
+    assert commit_import(parse_csv_text(TEMPLATE_CSV), repo, resolve) == ImportResult(0, 2, 0)
+    assert calls == [("Pancakes", 1), ("Garlic Pasta", 2)]
+    assert len(repo.list_summaries()) == 2
+
+
+def test_failure_mid_replace_leaves_library_unchanged(monkeypatch):
+    repo = fresh(); commit_import(parse_csv_text(TEMPLATE_CSV), repo, never)
+    before = [(s, repo.get(s.id)) for s in repo.list_summaries()]
+    real_delete = repo.delete; n = {"i": 0}
+
+    def flaky(recipe_id):
+        n["i"] += 1
+        if n["i"] == 2: raise RuntimeError("disk full")
+        real_delete(recipe_id)
+
+    monkeypatch.setattr(repo, "delete", flaky)
+    with pytest.raises(RuntimeError):
+        commit_import(parse_csv_text(TEMPLATE_CSV), repo,
+                      lambda r, e: DuplicateChoice("replace", apply_to_all=True))
+    assert n["i"] == 2
+    assert [(s, repo.get(s.id)) for s in repo.list_summaries()] == before
+
+
+def test_same_name_recipes_rejected_before_any_write():
+    repo = fresh()
+    preview = parse_csv_text(H + "A,1,egg,1,\nB,1,egg,1,\n")
+    preview.recipes[1].name = "a"  # renamed without revalidating
+    with pytest.raises(ValueError):
+        commit_import(preview, repo, never)
+    assert repo.list_summaries() == []

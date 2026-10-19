@@ -136,7 +136,12 @@ no error on any non-skipped recipe or row.
 On confirm, each incoming recipe whose normalized name (trimmed, lowercase)
 matches an existing recipe prompts: **Replace** (delete existing, insert
 new), **Skip**, or **Keep both**, with an "Apply to all remaining" checkbox.
-Cancelling the prompt cancels the whole import.
+Cancelling the prompt cancels the whole import. An "Apply to all remaining"
+choice is not applied to a recipe that matches more than one library recipe;
+the user is asked again, so the "Replace removes all of them" warning is
+always seen. Two non-skipped recipes in the same preview may not share a
+normalized name: both show "Another recipe in this import has the same name"
+and the import stays disabled until one is renamed or skipped.
 
 ### Persistence
 

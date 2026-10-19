@@ -3,6 +3,7 @@ from typing import Callable, Literal
 
 from shopping_list.core.importer import ImportPreview
 from shopping_list.core.models import Recipe, RecipeSummary
+from shopping_list.core.validation import normalize_recipe_name
 from shopping_list.storage.recipes import RecipeRepository
 
 
@@ -31,6 +32,9 @@ def commit_import(
     if the preview is not importable.
     """
     recipes = preview.to_recipes()
+    names = [normalize_recipe_name(r.name) for r in recipes]
+    if len(set(names)) != len(names):
+        raise ValueError("Two recipes in this import have the same name")
 
     # Phase 1: decide every action before touching the database.
     plan: list[tuple[Recipe, str, list[RecipeSummary]]] = []
@@ -40,7 +44,9 @@ def commit_import(
         if not existing:
             plan.append((recipe, "add", []))
             continue
-        choice = sticky
+        # A sticky choice never covers several matches: Replace would delete
+        # them all, so the user is asked (and warned) again.
+        choice = sticky if len(existing) == 1 else None
         if choice is None:
             choice = resolve(recipe, existing)
             if choice is None:
