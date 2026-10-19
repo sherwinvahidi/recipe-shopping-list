@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QDialog, QFileDialog,
                                QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
+from shopping_list.core.quantity import format_quantity
 from shopping_list.core.template import TEMPLATE_CSV
 from shopping_list.storage.recipes import RecipeRepository
 from shopping_list.ui.import_dialog import ImportDialog
@@ -104,7 +105,7 @@ class LibraryView(QWidget):
         recipe = self._repo.get(item.data(Qt.UserRole))
         self.detail_table.setRowCount(len(recipe.ingredients))
         for row, ing in enumerate(recipe.ingredients):
-            qty = "" if ing.quantity is None else str(ing.quantity)
+            qty = "" if ing.quantity is None else format_quantity(ing.quantity)
             for col, text in enumerate((qty, ing.unit or "", ing.name)):
                 self.detail_table.setItem(row, col, QTableWidgetItem(text))
 

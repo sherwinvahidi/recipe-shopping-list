@@ -1,6 +1,7 @@
 import pytest
 from fractions import Fraction as F
 from shopping_list.core.quantity import parse_quantity, QuantityError, QUANTITY_ERROR_MESSAGE
+from shopping_list.core.quantity import format_quantity
 
 @pytest.mark.parametrize("text,expected", [
     ("2", F(2)), ("0.5", F(1, 2)), (".5", F(1, 2)), ("1/2", F(1, 2)),
@@ -28,3 +29,13 @@ def test_huge_digit_string_is_quantity_error():
     for text in ("9" * 5000, "1/" + "9" * 5000, "1." + "9" * 5000 + "1"):
         with pytest.raises(QuantityError):
             parse_quantity(text)
+
+
+@pytest.mark.parametrize("q,text", [
+    (F(3), "3"), (F(1000), "1000"), (F(3, 2), "1½"), (F(2, 3), "⅔"), (F(19, 8), "2⅜"),
+    (F(1, 4), "¼"), (F(7, 4), "1¾"), (F(1, 8), "⅛"), (F(4, 3), "1⅓"),
+    (F(5, 6), "0.83"), (F(7, 6), "1.17"), (F(3, 5), "0.6"), (F(1, 16), "0.06"),
+    (F(1, 200), "0.01"), (F(1, 300), "<0.01"), (F(2999, 1000), "3"),
+])
+def test_format_quantity(q, text):
+    assert format_quantity(q) == text

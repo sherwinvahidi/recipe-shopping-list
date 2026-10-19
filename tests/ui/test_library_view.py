@@ -41,7 +41,7 @@ def test_list_sorted_and_filter(qtbot):
 def test_detail_shows_ingredients(qtbot):
     _, v = seeded(qtbot); v.recipe_list.setCurrentRow(1)
     t = v.detail_table
-    assert [t.item(0, c).text() for c in range(3)] == ["3/2", "cup", "flour"]
+    assert [t.item(0, c).text() for c in range(3)] == ["1½", "cup", "flour"]
     assert [t.item(1, c).text() for c in range(3)] == ["", "", "salt"]
 
 
