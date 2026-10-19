@@ -8,6 +8,7 @@ from shopping_list.core.units import canonical_unit
 
 INGREDIENT_REQUIRED = "Ingredient name is required"
 RECIPE_NAME_REQUIRED = "Recipe name is required"
+MAX_SERVINGS = 1_000_000
 SERVINGS_INVALID = "Servings must be a whole number of 1 or more"
 NO_INGREDIENTS = "Recipe has no ingredients"
 UNKNOWN_UNIT = "Unknown unit '{unit}' — it will only combine with the same unit"
@@ -61,9 +62,14 @@ def validate_recipe(name: str, servings: str, active_row_count: int) -> tuple[in
         issues.append(Issue("error", RECIPE_NAME_REQUIRED, "recipe"))
     text = servings.strip()
     count: int | None = None
-    if re.fullmatch(r"\d+", text) and int(text) > 0:
-        count = int(text)
-    else:
+    if re.fullmatch(r"[0-9]+", text):
+        try:
+            value = int(text)
+        except ValueError:  # beyond Python's int-string digit limit
+            value = 0
+        if 0 < value <= MAX_SERVINGS:
+            count = value
+    if count is None:
         issues.append(Issue("error", SERVINGS_INVALID, "servings"))
     if active_row_count <= 0:
         issues.append(Issue("error", NO_INGREDIENTS, None))

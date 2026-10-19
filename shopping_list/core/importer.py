@@ -18,6 +18,8 @@ MISSING_COLUMNS = (
 )
 NO_ROWS = "No recipe rows found. Required columns: recipe, servings, ingredient, quantity, unit"
 NOT_UTF8 = "File is not valid UTF-8 text. Save it as 'CSV UTF-8' and try again."
+COULD_NOT_READ = "Could not read file: {error}"
+CSV_INVALID = "This doesn't look like a valid CSV: {error}"
 IGNORED_COLUMNS = "Ignored columns: {columns}"
 SERVINGS_MISMATCH = "Rows disagree on servings; using {servings}"
 
@@ -92,7 +94,8 @@ def _blank(cells: list[str]) -> bool:
 
 def _valid_servings(text: str) -> int | None:
     text = text.strip()
-    return int(text) if text.isdecimal() and text.isascii() and int(text) > 0 else None
+    count, _ = validate_recipe("x", text, 1)
+    return count
 
 
 def parse_csv_text(text: str) -> ImportPreview:
@@ -103,13 +106,16 @@ def parse_csv_text(text: str) -> ImportPreview:
 
     header: list[str] | None = None
     data: list[tuple[int, list[str]]] = []
-    for cells in reader:
-        if _blank(cells):
-            continue
-        if header is None:
-            header = cells
-        else:
-            data.append((reader.line_num, cells))
+    try:
+        for cells in reader:
+            if _blank(cells):
+                continue
+            if header is None:
+                header = cells
+            else:
+                data.append((reader.line_num, cells))
+    except csv.Error as err:
+        return ImportPreview(file_issues=[_error(CSV_INVALID.format(error=err))])
 
     if header is None:
         preview.file_issues.append(_error(NO_ROWS))
@@ -179,6 +185,8 @@ def parse_csv_file(path: Path) -> ImportPreview:
         text = Path(path).read_text(encoding="utf-8-sig", newline="")
     except UnicodeDecodeError:
         return ImportPreview(file_issues=[_error(NOT_UTF8)])
+    except OSError as err:
+        return ImportPreview(file_issues=[_error(COULD_NOT_READ.format(error=err))])
     return parse_csv_text(text)
 
 

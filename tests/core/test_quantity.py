@@ -20,3 +20,11 @@ def test_rejects(text):
     with pytest.raises(QuantityError) as exc:
         parse_quantity(text)
     assert str(exc.value) == QUANTITY_ERROR_MESSAGE
+
+
+def test_huge_digit_string_is_quantity_error():
+    import pytest
+    from shopping_list.core.quantity import QuantityError, parse_quantity
+    for text in ("9" * 5000, "1/" + "9" * 5000, "1." + "9" * 5000 + "1"):
+        with pytest.raises(QuantityError):
+            parse_quantity(text)

@@ -34,6 +34,15 @@ def _frac_value(token: str) -> Fraction:
 
 
 def parse_quantity(text: str) -> Fraction | None:
+    try:
+        return _parse_quantity(text)
+    except ValueError as err:  # includes int-string digit limit; QuantityError is a ValueError
+        if isinstance(err, QuantityError):
+            raise
+        raise QuantityError() from err
+
+
+def _parse_quantity(text: str) -> Fraction | None:
     text = text.strip()
     if not text:
         return None

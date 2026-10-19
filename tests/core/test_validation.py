@@ -60,3 +60,12 @@ def test_recipe_errors():
 
 def test_normalize_recipe_name():
     assert normalize_recipe_name("  Garlic   Pasta ") == "garlic pasta"
+
+
+def test_servings_huge_or_over_cap_invalid():
+    from shopping_list.core.validation import SERVINGS_INVALID, validate_recipe
+    for s in ("9" * 5000, "1000001", str(2**63)):
+        count, issues = validate_recipe("A", s, 1)
+        assert count is None and any(i.message == SERVINGS_INVALID for i in issues)
+    count, issues = validate_recipe("A", "1000000", 1)
+    assert count == 1_000_000 and not issues

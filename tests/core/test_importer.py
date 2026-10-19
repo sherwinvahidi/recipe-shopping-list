@@ -164,3 +164,30 @@ def test_paste_without_header():
     assert p.file_issues and p.file_issues[0].message.startswith(
         "Missing required column(s): recipe, servings, ingredient, quantity, unit"
     )
+
+
+def test_parse_csv_file_directory_is_read_error(tmp_path):
+    from shopping_list.core.importer import COULD_NOT_READ, parse_csv_file
+    d = tmp_path / "x.csv"
+    d.mkdir()
+    preview = parse_csv_file(d)
+    assert not preview.is_importable
+    assert len(preview.file_issues) == 1
+    assert preview.file_issues[0].message.startswith("Could not read file: ")
+    assert COULD_NOT_READ.startswith("Could not read file")
+
+
+def test_parse_csv_file_missing_is_read_error(tmp_path):
+    from shopping_list.core.importer import parse_csv_file
+    preview = parse_csv_file(tmp_path / "nope.csv")
+    assert not preview.is_importable
+    assert preview.file_issues[0].message.startswith("Could not read file: ")
+
+
+def test_parse_csv_text_oversized_cell_is_invalid_csv():
+    import csv
+    from shopping_list.core.importer import parse_csv_text
+    big = "a" * (csv.field_size_limit() + 1)
+    preview = parse_csv_text("recipe,servings,ingredient,quantity,unit\n" + big + ",1,x,1,\n")
+    assert not preview.is_importable
+    assert preview.file_issues[0].message.startswith("This doesn't look like a valid CSV: ")
