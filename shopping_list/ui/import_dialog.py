@@ -45,6 +45,14 @@ def _build_duplicate_box(parent: QWidget | None, recipe: Recipe,
     return box, buttons
 
 
+def _failure_reason(err: Exception) -> str:
+    # KeyError's str() is just the repr of the key, which means nothing to a user.
+    message = str(err).strip()
+    if isinstance(err, KeyError) or not message:
+        return f"Unexpected error ({type(err).__name__})."
+    return message
+
+
 def ask_duplicate(parent: QWidget, recipe: Recipe,
                   existing: list[RecipeSummary]) -> DuplicateChoice | None:
     """Ask what to do with a recipe whose name already exists. None = cancel import."""
@@ -251,7 +259,7 @@ class ImportDialog(QDialog):
         try:
             result = commit_import(self._preview, self._repo, self._resolve)
         except Exception as err:
-            QMessageBox.critical(self, "Import failed", f"Nothing was imported.\n\n{err}")
+            QMessageBox.critical(self, "Import failed", f"Nothing was imported.\n\n{_failure_reason(err)}")
             return
         if result is None:
             return
