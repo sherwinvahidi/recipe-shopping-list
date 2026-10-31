@@ -29,7 +29,8 @@ _ALIASES: dict[str, str] = {
 _CASE_SENSITIVE = {"t": "tsp", "T": "tbsp"}
 
 
-def _normalize(text: str) -> str:
+def normalize_unit_text(text: str) -> str:
+    """Trim, drop a trailing period, collapse whitespace and read "fl." as "fl"."""
     key = text.strip()
     if key.endswith("."):
         key = key[:-1]
@@ -43,7 +44,7 @@ def canonical_unit(text: str) -> tuple[str | None, bool]:
     trimmed = text.strip()
     if not trimmed:
         return None, True
-    key = _normalize(trimmed)
+    key = normalize_unit_text(trimmed)
     if key in _CASE_SENSITIVE:
         return _CASE_SENSITIVE[key], True
     canon = _ALIASES.get(key.lower())

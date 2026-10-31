@@ -116,3 +116,17 @@ def test_same_name_recipes_rejected_before_any_write():
     with pytest.raises(ValueError):
         commit_import(preview, repo, never)
     assert repo.list_summaries() == []
+
+
+
+def test_result_maps_replaced_ids_to_new_ids():
+    repo = fresh(); commit_import(parse_csv_text(TEMPLATE_CSV), repo, never)
+    commit_import(parse_csv_text(H + "Pancakes,4,egg,1,\n"), repo,
+                  lambda r, e: DuplicateChoice("keep_both"))
+    old = {s.name: s.id for s in repo.list_summaries()}
+    old_pancakes = sorted(s.id for s in repo.find_by_name("Pancakes"))
+    result = commit_import(parse_csv_text(TEMPLATE_CSV), repo,
+                           lambda r, e: DuplicateChoice("replace"))
+    new = {s.name: s.id for s in repo.list_summaries()}
+    assert result.replaced_ids == {old_pancakes[0]: new["Pancakes"], old_pancakes[1]: new["Pancakes"],
+                                   old["Garlic Pasta"]: new["Garlic Pasta"]}
